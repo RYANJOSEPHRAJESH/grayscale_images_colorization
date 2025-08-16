@@ -9,10 +9,17 @@ import random
 # -------------------
 # CONFIGURATION
 # -------------------
-DATASET_DIR = "MyDataset"
+# Set the input and output directories as requested
+INPUT_DIR = "input_images"
+OUTPUT_DIR = "output_images"
 MODEL_PATH = "colorization_unet.pth"
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 NUM_TEST_IMAGES = 5
+
+# Create output directory if it doesn't exist
+if not os.path.exists(OUTPUT_DIR):
+    os.makedirs(OUTPUT_DIR)
+    print(f"Created output directory: {OUTPUT_DIR}")
 
 # ----------------------------------------------------------------------
 # U-NET MODEL ARCHITECTURE (Must be identical to the training model)
@@ -103,8 +110,10 @@ def load_image(image_path):
     gray_img_tensor = transforms.functional.rgb_to_grayscale(color_img_tensor).to(DEVICE)
     return gray_img_tensor, color_img_tensor
 
-def show_images(gray_input, colored_output, original_color, title="Colorization Results"):
-    """Displays the input, output, and original images."""
+def save_comparison_image(gray_input, colored_output, original_color, output_path, title="Colorization Results"):
+    """
+    Saves a single image with the input, output, and original images for comparison.
+    """
     fig, axes = plt.subplots(1, 3, figsize=(15, 5))
     fig.suptitle(title, fontsize=16)
 
@@ -126,7 +135,8 @@ def show_images(gray_input, colored_output, original_color, title="Colorization 
     axes[2].axis('off')
     
     plt.tight_layout()
-    plt.show()
+    plt.savefig(output_path)
+    plt.close(fig) # Close the figure to free up memory
 
 # ----------------------------------------------------------------------
 # MAIN EXECUTION
@@ -138,25 +148,32 @@ if __name__ == "__main__":
     model.eval()
     print(f"✅ Model weights loaded from: {MODEL_PATH}")
 
-    # Get a list of all image files in the dataset directory
-    image_files = [f for f in os.listdir(DATASET_DIR) if f.lower().endswith(('png', 'jpg', 'jpeg'))]
+    # Get a list of all image files in the input directory
+    if not os.path.exists(INPUT_DIR):
+        print(f"Error: The input directory '{INPUT_DIR}' does not exist.")
+    else:
+        image_files = [f for f in os.listdir(INPUT_DIR) if f.lower().endswith(('png', 'jpg', 'jpeg'))]
     
-    if len(image_files) < NUM_TEST_IMAGES:
-        print(f"Warning: Not enough images in '{DATASET_DIR}'. Found {len(image_files)}, need {NUM_TEST_IMAGES}.")
-        NUM_TEST_IMAGES = len(image_files)
-
-    # Randomly select a few images to test
-    test_images = random.sample(image_files, NUM_TEST_IMAGES)
-    
-    print(f"Testing on {NUM_TEST_IMAGES} random images...")
-    with torch.no_grad():
-        for img_name in test_images:
-            image_path = os.path.join(DATASET_DIR, img_name)
-            gray_input, original_color = load_image(image_path)
+        if len(image_files) < NUM_TEST_IMAGES:
+            print(f"Warning: Not enough images in '{INPUT_DIR}'. Found {len(image_files)}, will process all available images.")
+            NUM_TEST_IMAGES = len(image_files)
+        
+        if NUM_TEST_IMAGES > 0:
+            # Randomly select a few images to test
+            test_images = random.sample(image_files, NUM_TEST_IMAGES)
             
-            # Predict the colorized image
-            colored_output = model(gray_input)
-            
-            # Display the results
-            show_images(gray_input, colored_output, original_color, title=f"Colorization Result for '{img_name}'")
-
+            print(f"Testing on {NUM_TEST_IMAGES} random images...")
+            with torch.no_grad():
+                for img_name in test_images:
+                    image_path = os.path.join(INPUT_DIR, img_name)
+                    gray_input, original_color = load_image(image_path)
+                    
+                    # Predict the colorized image
+                    colored_output = model(gray_input)
+                    
+                    # Save the comparison image
+                    output_path = os.path.join(OUTPUT_DIR, f"colorized_{img_name}")
+                    save_comparison_image(gray_input, colored_output, original_color, output_path, title=f"Colorization Result for '{img_name}'")
+                    print(f"🖼️ Saved result to: {output_path}")
+        else:
+            print(f"No images found in '{INPUT_DIR}' to process. Please add images and try again.")
